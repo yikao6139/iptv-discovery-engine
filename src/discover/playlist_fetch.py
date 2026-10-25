@@ -83,7 +83,9 @@ class PlaylistCrawler:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         prefetched = prefetched or {}
-        self.queue = [(u, 0) for u in sorted(start_urls)]
+        # 预取内容（秒回）优先于网络抓取，避免排在不可达 URL 后被饿死
+        self.queue = [(u, 0) for u in sorted(
+            start_urls, key=lambda u: (u not in prefetched, u))]
         while self.queue and self.fetched < self.max_nodes:
             if time.monotonic() - self._t0 > self.max_runtime:
                 print("[crawler] global time budget exceeded, stopping")

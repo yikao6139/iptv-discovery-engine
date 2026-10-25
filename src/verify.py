@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -24,6 +25,27 @@ except ImportError:  # 允许作为独立脚本执行
     import config as config  # type: ignore
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _resolve_bin(name: str) -> str | None:
+    """定位 ffmpeg/ffprobe：PATH 优先，其次 IPTV_ENGINE_FFMPEG_DIR 目录。
+
+    目录内可执行文件可能带版本后缀（如 ffmpeg-win-x86_64-v7.1.exe），
+    故按 name*.exe 通配匹配。
+    """
+    import glob
+
+    exe = shutil.which(name)
+    if exe:
+        return exe
+    d = os.environ.get("IPTV_ENGINE_FFMPEG_DIR")
+    if d:
+        for pat in (os.path.join(d, f"{name}*.exe"),
+                    os.path.join(d, f"{name}*")):
+            hits = sorted(glob.glob(pat))
+            if hits:
+                return hits[0]
+    return None
 
 
 @dataclass
@@ -61,10 +83,11 @@ def _http_precheck(url: str, timeout: float) -> tuple[bool, float]:
 
 def _ffprobe(url: str, timeout: float) -> ProbeResult:
     """ffprobe 解析流信息，必须有 video 或 audio 流才算可播放。"""
-    if shutil.which("ffprobe") is None:
+    probe = _resolve_bin("ffprobe")
+    if probe is None:
         return ProbeResult(url=url, ok=False, reason="ffprobe not installed")
     cmd = [
-        "ffprobe", "-v", "error",
+        probe, "-v", "error",
         "-rw_timeout", "10000000",
         "-user_agent", config.UA,
         "-show_entries", "stream=codec_type,codec_name,width,height",
@@ -77,22 +100,22 @@ def _ffprobe(url: str, timeout: float) -> ProbeResult:
         return ProbeResult(url=url, ok=False, reason="ffprobe timeout")
     latency = (time.monotonic() - t0) * 1000.0
     if proc.returncode != 0:
-        return ProbeResult(url=url, ok=False, latency=latency,
+        return ProbeResult(url=url, ok=False, latency_ms=latency,
                            reason="ffprobe exit!=0")
     try:
         info = json.loads(proc.stdout.decode("utf-8", "replace"))
     except json.JSONDecodeError:
-        return ProbeResult(url=url, ok=False, latency=latency,
+        return ProbeResult(url=url, ok=False, latency_ms=latency,
                            reason="probe json parse fail")
     streams = info.get("streams", [])
     videos = [s for s in streams if s.get("codec_type") == "video"]
     audios = [s for s in streams if s.get("codec_type") == "audio"]
     if not videos and not audios:
-        return ProbeResult(url=url, ok=False, latency=latency,
+        return ProbeResult(url=url, ok=False, latency_ms=latency,
                            reason="no media stream")
     v = videos[0] if videos else {}
     return ProbeResult(
-        url=url, ok=True, latency=latency,
+        url=url, ok=True, latency_ms=latency,
         width=int(v.get("width") or 0), height=int(v.get("height") or 0),
         codec=v.get("codec_name") or "", reason="ok",
     )
@@ -100,10 +123,11 @@ def _ffprobe(url: str, timeout: float) -> ProbeResult:
 
 def _ffmpeg_read_test(url: str, timeout: float) -> ProbeResult:
     """兜底：ffprobe 读不到但实际可播放的源，用 ffmpeg 实测拉流 N 秒。"""
-    if shutil.which("ffmpeg") is None:
+    ffmpeg = _resolve_bin("ffmpeg")
+    if ffmpeg is None:
         return ProbeResult(url=url, ok=False, reason="ffmpeg not installed")
     cmd = [
-        "ffmpeg", "-v", "error",
+        ffmpeg, "-v", "error",
         "-rw_timeout", "10000000",
         "-user_agent", config.UA,
         "-i", url,
@@ -118,9 +142,9 @@ def _ffmpeg_read_test(url: str, timeout: float) -> ProbeResult:
     latency = (time.monotonic() - t0) * 1000.0
     err = proc.stderr.decode("utf-8", "replace").lower()
     if proc.returncode == 0 and "error" not in err:
-        return ProbeResult(url=url, ok=True, latency=latency,
+        return ProbeResult(url=url, ok=True, latency_ms=latency,
                            reason="ffmpeg read ok")
-    return ProbeResult(url=url, ok=False, latency=latency,
+    return ProbeResult(url=url, ok=False, latency_ms=latency,
                        reason="ffmpeg read failed")
 
 
@@ -129,16 +153,16 @@ def verify_one(url: str, timeout: float | None = None) -> ProbeResult:
     timeout = timeout if timeout is not None else config.FFPROBE_TIMEOUT
     http_ok, latency = _http_precheck(url, config.VERIFY_HTTP_TIMEOUT)
     if not http_ok:
-        return ProbeResult(url=url, ok=False, latency=latency,
+        return ProbeResult(url=url, ok=False, latency_ms=latency,
                            reason="http precheck fail")
     res = _ffprobe(url, timeout)
     if not res.ok:
         res2 = _ffmpeg_read_test(url, timeout)
-        if res2.latency <= 0:
-            res2.latency = latency
+        if res2.latency_ms <= 0:
+            res2.latency_ms = latency
         return res2
-    if res.latency <= 0:
-        res.latency = latency
+    if res.latency_ms <= 0:
+        res.latency_ms = latency
     return res
 
 

@@ -93,8 +93,11 @@ python -m src.pipeline --no-verify
 | `--max-verify` | 0 | 本次最多验证的 URL 数（0=不限） |
 | `--no-verify` | - | 跳过流验证 |
 
-> 本地调试遇到证书链异常（`CERTIFICATE_VERIFY_FAILED`）时，可设
-> `IPTV_ENGINE_SSL_VERIFY=0` 临时关闭校验（仅调试用，CI 默认开启校验）。
+> 本地调试提示：
+> - 证书链异常（`CERTIFICATE_VERIFY_FAILED`）时设 `IPTV_ENGINE_SSL_VERIFY=0` 临时关闭校验
+>   （仅调试用，CI 默认开启校验）；
+> - ffmpeg 不在 PATH 时，用 `IPTV_ENGINE_FFMPEG_DIR=<目录>` 指定目录
+>   （目录内按 `ffmpeg*.exe` / `ffprobe*.exe` 通配识别，兼容带版本后缀的构建）。
 
 ### 单元测试
 

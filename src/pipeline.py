@@ -120,6 +120,14 @@ def main() -> int:
             pending_new += 1
         if registry.should_reverify(sid) and src["url"] not in reverify_urls:
             reverify_urls.append(src["url"])
+    # 历史源复验：即使本次未发现任何新源，也必须复验到期的注册表条目
+    for sid, src in registry.data["sources"].items():
+        url = src.get("url")
+        if not url or url in reverify_urls:
+            continue
+        if registry.should_reverify(sid):
+            reverify_urls.append(url)
+            url2sid.setdefault(url, sid)
     print(f"[pipeline] new/pending={pending_new} to_reverify={len(reverify_urls)}")
 
     # ---- 真实可播放性验证（HTTP 预检 + ffprobe/ffmpeg 拉流） ----
