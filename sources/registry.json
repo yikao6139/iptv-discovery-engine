@@ -1,10 +1,10 @@
 {
   "meta": {
     "version": 1,
-    "last_run": "2026-10-25T16:06:43+0800",
+    "last_run": "2026-10-25T16:15:45+0800",
     "discovered": 0,
-    "verified_ok": 184,
-    "verified_fail": 216,
+    "verified_ok": 0,
+    "verified_fail": 0,
     "evicted": 0
   },
   "sources": {
