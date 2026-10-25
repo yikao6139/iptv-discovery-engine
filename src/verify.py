@@ -65,9 +65,15 @@ class ProbeResult:
         return d
 
 
-def _http_precheck(url: str, timeout: float) -> tuple[bool, float]:
-    """快速预检：能拿到 <400 响应即认为 HTTP 层可用。"""
+def _http_precheck(url: str, timeout: float) -> tuple[bool, float, bool]:
+    """快速预检。
+
+    返回 (ok, latency_ms, responded)：
+    - responded=True 表示服务器有 HTTP 响应（可能 403/405，此类源仍可能可播）；
+    - responded=False 表示连接/DNS/读超时，属于死链。
+    """
     t0 = time.monotonic()
+    responded = False
     try:
         r = requests.get(
             url, timeout=timeout, stream=True,
@@ -75,10 +81,11 @@ def _http_precheck(url: str, timeout: float) -> tuple[bool, float]:
             allow_redirects=True, verify=config.SSL_VERIFY,
         )
         r.close()
+        responded = True
         latency = (time.monotonic() - t0) * 1000.0
-        return (r.status_code < 400), latency
+        return (r.status_code < 400), latency, responded
     except requests.RequestException:
-        return False, (time.monotonic() - t0) * 1000.0
+        return False, (time.monotonic() - t0) * 1000.0, responded
 
 
 def _ffprobe(url: str, timeout: float) -> ProbeResult:
@@ -151,8 +158,9 @@ def _ffmpeg_read_test(url: str, timeout: float) -> ProbeResult:
 def verify_one(url: str, timeout: float | None = None) -> ProbeResult:
     """单个 URL 完整验证：HTTP 预检 → ffprobe → ffmpeg 兜底。"""
     timeout = timeout if timeout is not None else config.FFPROBE_TIMEOUT
-    http_ok, latency = _http_precheck(url, config.VERIFY_HTTP_TIMEOUT)
-    if not http_ok:
+    http_ok, latency, responded = _http_precheck(url, config.VERIFY_HTTP_TIMEOUT)
+    if not http_ok and not responded:
+        # 完全无响应（超时/DNS 失败）才快速淘汰；有响应但非 2xx 仍实测拉流
         return ProbeResult(url=url, ok=False, latency_ms=latency,
                            reason="http precheck fail")
     res = _ffprobe(url, timeout)
