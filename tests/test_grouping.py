@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.playlist import GROUP_ORDER, _group  # noqa: E402
+from src.playlist import GROUP_ORDER, _group, _sort_key  # noqa: E402
 
 
 def test_group_cctv():
@@ -49,3 +49,27 @@ def test_group_other():
 
 def test_group_order_complete():
     assert GROUP_ORDER == ["央视", "卫视", "体育", "港澳台", "少儿", "其它"]
+
+
+def _entry(channel: str) -> dict:
+    return {"channel": channel, "url": "http://x", "quality": {}, "latency_ms": 1}
+
+
+def test_numeric_sort_cctv():
+    """央视带数字的频道按数字从小到大排列。"""
+    entries = [_entry(c) for c in
+               ("CCTV10", "CCTV2", "CCTV1", "CCTV17", "CCTV5体育", "CCTV3")]
+    ordered = sorted(entries, key=_sort_key)
+    assert [e["channel"] for e in ordered] == \
+        ["CCTV1", "CCTV2", "CCTV3", "CCTV5体育", "CCTV10", "CCTV17"]
+
+
+def test_numeric_sort_keeps_height_secondary():
+    """同一频道内仍按清晰度→延迟排序。"""
+    entries = [
+        {"channel": "CCTV1", "url": "a", "quality": {"height": 720}, "latency_ms": 5},
+        {"channel": "CCTV1", "url": "b", "quality": {"height": 1080}, "latency_ms": 9},
+        {"channel": "CCTV1", "url": "c", "quality": {"height": 1080}, "latency_ms": 3},
+    ]
+    ordered = sorted(entries, key=_sort_key)
+    assert [e["url"] for e in ordered] == ["c", "b", "a"]

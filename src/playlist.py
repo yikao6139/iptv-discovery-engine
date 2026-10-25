@@ -2,6 +2,7 @@
 """生成标准化 M3U / TXT（DIYP 格式）播放列表文件。"""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 try:
@@ -51,10 +52,21 @@ def _group(channel: str) -> str:
     return "其它"
 
 
+_NUM_RE = re.compile(r"^(\D*?)(\d+)(.*)$")
+
+
+def _natural_key(channel: str) -> tuple:
+    """频道名自然排序键：数字部分按数值比较（CCTV1 < CCTV2 < ... < CCTV10）。"""
+    m = _NUM_RE.match(channel)
+    if m:
+        return (m.group(1), int(m.group(2)), m.group(3))
+    return (channel, -1, "")
+
+
 def _sort_key(entry: dict):
     height = (entry.get("quality") or {}).get("height") or 0
     group = _group(entry["channel"])
-    return (GROUP_INDEX.get(group, 99), entry["channel"],
+    return (GROUP_INDEX.get(group, 99), *_natural_key(entry["channel"]),
             -(height or 0), entry.get("latency_ms") or 1e9)
 
 
