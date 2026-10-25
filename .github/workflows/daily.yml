@@ -44,10 +44,12 @@ jobs:
         run: |
           git config user.name "iptv-engine-bot"
           git config user.email "actions@github.com"
+          # actions/checkout 检出的是游离 HEAD，先固定到 main 分支再提交推送
+          git checkout -B main
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "chore(daily): auto update $(date -u +'%Y-%m-%dT%H:%MZ')"
-            git push
+            git push origin main
           else
             echo "No changes to commit"
           fi
