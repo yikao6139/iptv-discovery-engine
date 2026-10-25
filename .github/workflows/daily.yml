@@ -1,0 +1,60 @@
+# 每日 02:00（北京时间）= 18:00 UTC
+name: Daily IPTV Update
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iptv-daily
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Sanity check ffmpeg
+        run: ffmpeg -version | head -n 1
+
+      - name: Run discovery pipeline
+        run: python -m src.pipeline --max-playlists 400
+
+      - name: Commit and push
+        run: |
+          git config user.name "iptv-engine-bot"
+          git config user.email "actions@github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(daily): auto update $(date -u +'%Y-%m-%dT%H:%MZ')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Upload registry snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources-registry
+          path: sources/registry.json
+          retention-days: 7

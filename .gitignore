@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 本地运行产物（CI 产物必须入库，故不忽略 sources/ 与 output/）
+.pytest_cache/
+*.log
+.DS_Store

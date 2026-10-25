@@ -1,0 +1,7 @@
+#EXTM3U
+#EXTINF:-1,CCTV-1 高清
+http://example.com/cctv1.m3u8
+#EXTINF:-1,湖南卫视
+http://example.com/hnws.m3u8
+#EXTINF:-1,浙江卫视
+nested.m3u
