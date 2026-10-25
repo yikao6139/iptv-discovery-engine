@@ -1,9 +1,9 @@
-# 每日 02:00（北京时间）= 18:00 UTC
+# 每日 04:00（北京时间）= 20:00 UTC
 name: Daily IPTV Update
 
 on:
   schedule:
-    - cron: "0 18 * * *"
+    - cron: "0 20 * * *"
   workflow_dispatch: {}
 
 permissions:
